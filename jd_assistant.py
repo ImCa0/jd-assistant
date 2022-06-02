@@ -835,6 +835,56 @@ class Assistant(object):
         except Exception as e:
             logger.error('订单结算页面数据解析异常（可以忽略），报错信息：%s', e)
 
+    @check_login
+    def save_shipment_bundle(self):
+        """修改配送方式
+
+        适配京东国际下单，防止报错：“您选择的收货地址不支持当前的配送方式，请重新选择配送方式！”
+
+        """
+        url = 'https://trade.jd.com/shopping/dynamic/shipBundle/saveShipmentBundle.action'
+        data = {
+          "saveParam.venderId": 1,
+          "saveParam.orderUuid": "-893579276",
+          "saveParam.combinationBundleUuid": "CombinationBundleRelation_1088962523667529728",
+          "saveParam.bundleUuid": "BundleRelation_1088962523759804416+",
+          "saveParam.isOnlyisOnlyBigItem": 0,
+          "saveParam.zxjOrDj": "zxj",
+          "saveParam.checkHonor": "false",
+          "saveParam.carDeliver": "false",
+          "saveParam.shipmentUuid": "101612_1088962523768193024",
+          "saveParam.shipmentType": 65,
+          "saveParam.midPromiseType": 4,
+          "saveParam.midPromiseFormatType": 2,
+          "saveParam.promiseUuid": "101613_1088962523898216448",
+          "saveParam.promiseDate": "2022-6-4",
+          "saveParam.batchId": 0,
+          "saveParam.promiseTimeRange": "09:00-21:00",
+          "saveParam.promiseSendPay": "{'1':'3','35':'4','278':'0','237':'4','161':'0','30':'3'}",
+          "saveParam.combine": "false",
+          "overseaMerge": 1,
+          "presaleStockSign": 1,
+        }
+        headers = {
+            'User-Agent': self.user_agent,
+            'Host': 'trade.jd.com',
+            'Referer': 'https://trade.jd.com/shopping/order/getOrderInfo.action?overseaMerge=1',
+        }
+        try:
+            resp = self.sess.post(url=url, data=data, headers=headers)
+            resp_json = json.loads(resp.text)
+
+            if resp_json.get('success'):
+                logger.info('配送方式修改成功')
+                return True
+            else:
+                logger.info('配送方式修改失败')
+                logger.info(resp_json)
+                return False
+        except Exception as e:
+            logger.error(e)
+            return False
+
     def _save_invoice(self):
         """下单第三方商品时如果未设置发票，将从电子发票切换为普通发票
 
@@ -906,6 +956,7 @@ class Assistant(object):
             'vendorRemarks': '[]',
             'submitOrderParam.sopNotPutInvoice': 'false',
             'submitOrderParam.trackID': 'TestTrackId',
+            'overseaMerge': 1,
             'submitOrderParam.ignorePriceChange': '0',
             'submitOrderParam.btSupport': '0',
             'riskControl': self.risk_control,
@@ -974,6 +1025,7 @@ class Assistant(object):
         for i in range(1, retry + 1):
             logger.info('第[%s/%s]次尝试提交订单', i, retry)
             self.get_checkout_page_detail()
+            self.save_shipment_bundle()
             if self.submit_order():
                 logger.info('第%s次提交订单成功', i)
                 return True
